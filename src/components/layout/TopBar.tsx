@@ -2,10 +2,11 @@ import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Settings } from 'lucide-react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@/components/ui/button'
 
 export function TopBar() {
-  const { projects, activeProjectId } = useStore(s => ({ projects: s.projects, activeProjectId: s.activeProjectId }))
+  const { projects, activeProjectId } = useStore(useShallow(s => ({ projects: s.projects, activeProjectId: s.activeProjectId })))
   const navigate = useNavigate()
   const activeProject = activeProjectId ? projects[activeProjectId] : null
 

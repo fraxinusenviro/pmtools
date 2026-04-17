@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import { Plus, Trash2, DollarSign, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -38,13 +39,13 @@ export function BudgetPage() {
     actualCosts,
     createActualCost,
     deleteActualCost,
-  } = useStore(s => ({
+  } = useStore(useShallow(s => ({
     projects: s.projects,
     tasks: s.tasks,
     actualCosts: s.actualCosts,
     createActualCost: s.createActualCost,
     deleteActualCost: s.deleteActualCost,
-  }))
+  })))
 
   const [addCostOpen, setAddCostOpen] = useState(false)
   const [deleteCostId, setDeleteCostId] = useState<string | null>(null)

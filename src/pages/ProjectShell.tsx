@@ -2,13 +2,14 @@ import React, { useEffect } from 'react'
 import { Outlet, useParams, useNavigate } from 'react-router-dom'
 import { ProjectTabBar } from '@/components/layout/ProjectTabBar'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 
 export function ProjectShell() {
   const { id } = useParams<{ id: string }>()
-  const { projects, setActiveProject } = useStore(s => ({
+  const { projects, setActiveProject } = useStore(useShallow(s => ({
     projects: s.projects,
     setActiveProject: s.setActiveProject,
-  }))
+  })))
 
   useEffect(() => {
     if (id) setActiveProject(id)

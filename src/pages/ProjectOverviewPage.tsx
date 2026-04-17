@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { Edit2, Calendar, DollarSign, Users, Flag, CheckCircle } from 'lucide-react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -34,14 +35,14 @@ const BUDGET_COLORS = ['#3b82f6', '#e2e8f0']
 
 export function ProjectOverviewPage() {
   const { id } = useParams<{ id: string }>()
-  const { projects, tasks, resources, assignments, actualCosts, updateProject } = useStore(s => ({
+  const { projects, tasks, resources, assignments, actualCosts, updateProject } = useStore(useShallow(s => ({
     projects: s.projects,
     tasks: s.tasks,
     resources: s.resources,
     assignments: s.assignments,
     actualCosts: s.actualCosts,
     updateProject: s.updateProject,
-  }))
+  })))
 
   const [editOpen, setEditOpen] = useState(false)
 
@@ -316,10 +317,10 @@ interface EditModalProps {
 }
 
 function EditProjectModal({ open, onClose, projectId }: EditModalProps) {
-  const { projects, updateProject } = useStore(s => ({
+  const { projects, updateProject } = useStore(useShallow(s => ({
     projects: s.projects,
     updateProject: s.updateProject,
-  }))
+  })))
   const project = projects[projectId]
 
   const [form, setForm] = useState(() =>

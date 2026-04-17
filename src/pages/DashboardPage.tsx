@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, FolderOpen, Calendar, DollarSign, TrendingUp } from 'lucide-react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@/components/ui/button'
 import { ProjectHealthBadge } from '@/components/shared/ProjectHealthBadge'
 import { ProgressBar } from '@/components/shared/ProgressBar'
@@ -12,12 +13,12 @@ import { format, parseISO } from 'date-fns'
 
 export function DashboardPage() {
   const [showNew, setShowNew] = useState(false)
-  const { projects, tasks, actualCosts, setActiveProject } = useStore(s => ({
+  const { projects, tasks, actualCosts, setActiveProject } = useStore(useShallow(s => ({
     projects: s.projects,
     tasks: s.tasks,
     actualCosts: s.actualCosts,
     setActiveProject: s.setActiveProject,
-  }))
+  })))
 
   const projectList = Object.values(projects).sort((a, b) => a.name.localeCompare(b.name))
 

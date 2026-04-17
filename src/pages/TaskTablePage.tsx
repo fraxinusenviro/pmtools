@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { getOrderedTaskIds } from '@/utils/wbsUtils'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -178,10 +179,10 @@ function TaskRow({
 export function TaskTablePage() {
   const { id: projectId } = useParams<{ id: string }>()
   const tasks = useStore(s => s.tasks)
-  const { createTask, deleteTask, indentTask, outdentTask, moveTask } = useStore(s => ({
+  const { createTask, deleteTask, indentTask, outdentTask, moveTask } = useStore(useShallow(s => ({
     createTask: s.createTask, deleteTask: s.deleteTask,
     indentTask: s.indentTask, outdentTask: s.outdentTask, moveTask: s.moveTask,
-  }))
+  })))
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)

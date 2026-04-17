@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Plus, Pencil, Trash2, UserPlus } from 'lucide-react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -52,7 +53,7 @@ export function ResourcesPage() {
     deleteResource,
     createAssignment,
     deleteAssignment,
-  } = useStore(s => ({
+  } = useStore(useShallow(s => ({
     resources: s.resources,
     assignments: s.assignments,
     tasks: s.tasks,
@@ -61,7 +62,7 @@ export function ResourcesPage() {
     deleteResource: s.deleteResource,
     createAssignment: s.createAssignment,
     deleteAssignment: s.deleteAssignment,
-  }))
+  })))
 
   const [addResourceOpen, setAddResourceOpen] = useState(false)
   const [editResource, setEditResource] = useState<Resource | null>(null)

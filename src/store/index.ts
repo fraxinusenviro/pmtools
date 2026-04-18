@@ -11,6 +11,8 @@ import type {
   BudgetLine, ActualCostEntry, Baseline, StatusReport,
   ScheduledTask, RAGStatus, TaskStatus,
 } from '@/types'
+import type { ColorBy, ColumnId, RowHeightKey } from '@/pages/gantt/types'
+import { DEFAULT_COLUMNS } from '@/pages/gantt/types'
 
 // ─── Seed data lazy import ────────────────────────────────────────────────────
 import { seedData } from '@/seed/seedData'
@@ -41,6 +43,10 @@ export interface StoreState {
   ganttScrollDate: string
   selectedTaskIds: string[]
   sidebarOpen: boolean
+  ganttColorBy: ColorBy
+  ganttShowLabels: boolean
+  ganttRowHeight: RowHeightKey
+  ganttVisibleColumns: ColumnId[]
 
   // Computed (not persisted)
   schedule: Record<string, ScheduledTask>
@@ -86,6 +92,16 @@ export interface StoreState {
   // ─── Schedule Actions ───────────────────────────────────────────────────────
   recomputeSchedule: (projectId: string) => void
 
+  // ─── Baseline Actions ────────────────────────────────────────────────────────
+  createBaseline: (projectId: string, name?: string) => string
+  deleteBaseline: (id: string) => void
+
+  // ─── Gantt UI Actions ────────────────────────────────────────────────────────
+  setGanttColorBy: (v: ColorBy) => void
+  setGanttShowLabels: (v: boolean) => void
+  setGanttRowHeight: (v: RowHeightKey) => void
+  setGanttVisibleColumns: (v: ColumnId[]) => void
+
   // ─── Import / Export ────────────────────────────────────────────────────────
   importStore: (data: Partial<StoreState>) => void
 }
@@ -116,6 +132,10 @@ export const useStore = create<StoreState>()(
       ganttScrollDate: new Date().toISOString().slice(0, 10),
       selectedTaskIds: [],
       sidebarOpen: true,
+      ganttColorBy: 'status' as ColorBy,
+      ganttShowLabels: false,
+      ganttRowHeight: 'normal' as RowHeightKey,
+      ganttVisibleColumns: DEFAULT_COLUMNS,
 
       // Computed
       schedule: {},
@@ -424,6 +444,46 @@ export const useStore = create<StoreState>()(
           set(s => { s.scheduleError = e.message })
         }
       },
+
+      // ─── Baselines ────────────────────────────────────────────────────────────
+      createBaseline: (projectId, name) => {
+        const id = generateId()
+        const state = get()
+        const projectTasks = Object.values(state.tasks).filter(t => t.projectId === projectId)
+        const baselineTasks = projectTasks.map(t => ({
+          taskId: t.id,
+          plannedStart: t.plannedStart,
+          plannedEnd: t.plannedEnd,
+          plannedDuration: t.plannedDuration,
+          budgetAmount: t.budgetAmount,
+        }))
+        set(s => {
+          s.baselines[id] = {
+            id,
+            projectId,
+            name: name ?? `Baseline ${new Date().toLocaleDateString()}`,
+            createdAt: now(),
+            tasks: baselineTasks,
+            budgetTotal: projectTasks.reduce((sum, t) => sum + t.budgetAmount, 0),
+          }
+          if (s.projects[projectId]) s.projects[projectId].baselineIds.push(id)
+        })
+        return id
+      },
+
+      deleteBaseline: (id) => set(state => {
+        const baseline = state.baselines[id]
+        if (!baseline) return
+        delete state.baselines[id]
+        const proj = state.projects[baseline.projectId]
+        if (proj) proj.baselineIds = proj.baselineIds.filter(bid => bid !== id)
+      }),
+
+      // ─── Gantt UI ─────────────────────────────────────────────────────────────
+      setGanttColorBy: (v) => set(s => { s.ganttColorBy = v }),
+      setGanttShowLabels: (v) => set(s => { s.ganttShowLabels = v }),
+      setGanttRowHeight: (v) => set(s => { s.ganttRowHeight = v }),
+      setGanttVisibleColumns: (v) => set(s => { s.ganttVisibleColumns = v }),
 
       // ─── Import ───────────────────────────────────────────────────────────────
       importStore: (data) => {

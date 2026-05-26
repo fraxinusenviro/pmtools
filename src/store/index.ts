@@ -11,6 +11,7 @@ import type {
   BudgetLine, ActualCostEntry, Baseline, StatusReport,
   ScheduledTask, RAGStatus, TaskStatus,
 } from '@/types'
+import type { LibraryPhase } from '@/data/envConsultancyLibrary'
 
 // ─── Seed data lazy import ────────────────────────────────────────────────────
 import { seedData } from '@/seed/seedData'
@@ -86,13 +87,24 @@ export interface StoreState {
   // ─── Schedule Actions ───────────────────────────────────────────────────────
   recomputeSchedule: (projectId: string) => void
 
+  // ─── Task Library ───────────────────────────────────────────────────────────
+  loadTaskTemplate: (projectId: string, phases: LibraryPhase[]) => void
+
   // ─── Import / Export ────────────────────────────────────────────────────────
   importStore: (data: Partial<StoreState>) => void
 }
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const now = () => new Date().toISOString()
+
+// Recompute and write WBS numbers into the immer draft after structural changes.
+function refreshWbs(state: { tasks: Record<string, Task> }, projectId: string) {
+  const wbsMap = computeWbsNumbers(state.tasks, projectId)
+  for (const [id, wbs] of Object.entries(wbsMap)) {
+    if (state.tasks[id]) state.tasks[id].wbsNumber = wbs
+  }
+}
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
@@ -195,11 +207,11 @@ export const useStore = create<StoreState>()(
           }
           state.tasks[id] = task
 
-          // Update parent's childIds
           if (data.parentId && state.tasks[data.parentId]) {
             state.tasks[data.parentId].childIds.push(id)
             state.tasks[data.parentId].isSummary = true
           }
+          refreshWbs(state, data.projectId)
         })
 
         get().recomputeSchedule(data.projectId)
@@ -247,10 +259,10 @@ export const useStore = create<StoreState>()(
               delete state.dependencies[dep.id]
             }
           }
-          // Remove assignments
           for (const asgn of Object.values(state.assignments)) {
             if (deleteSet.has(asgn.taskId)) delete state.assignments[asgn.id]
           }
+          refreshWbs(state, task.projectId)
         })
         get().recomputeSchedule(task.projectId)
       },
@@ -258,7 +270,6 @@ export const useStore = create<StoreState>()(
       indentTask: (id) => {
         const task = get().tasks[id]
         if (!task) return
-        // Find the sibling immediately above this task
         const siblings = Object.values(get().tasks)
           .filter(t => t.projectId === task.projectId && t.parentId === task.parentId && t.id !== id)
           .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -266,15 +277,17 @@ export const useStore = create<StoreState>()(
         if (!prevSibling) return
 
         set(state => {
-          // Remove from current parent's childIds
           if (task.parentId && state.tasks[task.parentId]) {
             state.tasks[task.parentId].childIds = state.tasks[task.parentId].childIds.filter(c => c !== id)
+            if (state.tasks[task.parentId].childIds.length === 0) {
+              state.tasks[task.parentId].isSummary = false
+            }
           }
-          // Add to prev sibling's children
           state.tasks[prevSibling.id].childIds.push(id)
           state.tasks[prevSibling.id].isSummary = true
           state.tasks[id].parentId = prevSibling.id
           state.tasks[id].sortOrder = state.tasks[prevSibling.id].childIds.length - 1
+          refreshWbs(state, task.projectId)
         })
         get().recomputeSchedule(task.projectId)
       },
@@ -286,25 +299,22 @@ export const useStore = create<StoreState>()(
         if (!parent) return
 
         set(state => {
-          // Remove from parent's children
           state.tasks[task.parentId!].childIds = state.tasks[task.parentId!].childIds.filter(c => c !== id)
           if (state.tasks[task.parentId!].childIds.length === 0) {
             state.tasks[task.parentId!].isSummary = false
           }
-          // Add as sibling after parent
           state.tasks[id].parentId = parent.parentId
           state.tasks[id].sortOrder = parent.sortOrder + 0.5
-          // Re-sort siblings
           const newSiblings = Object.values(state.tasks)
             .filter(t => t.projectId === task.projectId && t.parentId === parent.parentId)
             .sort((a, b) => a.sortOrder - b.sortOrder)
           newSiblings.forEach((t, i) => { state.tasks[t.id].sortOrder = i })
-          // Add to grandparent's childIds if needed
           if (parent.parentId && state.tasks[parent.parentId]) {
             if (!state.tasks[parent.parentId].childIds.includes(id)) {
               state.tasks[parent.parentId].childIds.push(id)
             }
           }
+          refreshWbs(state, task.projectId)
         })
         get().recomputeSchedule(task.projectId)
       },
@@ -324,7 +334,77 @@ export const useStore = create<StoreState>()(
           const tmp = state.tasks[id].sortOrder
           state.tasks[id].sortOrder = state.tasks[swapWith.id].sortOrder
           state.tasks[swapWith.id].sortOrder = tmp
+          refreshWbs(state, task.projectId)
         })
+      },
+
+      loadTaskTemplate: (projectId, phases) => {
+        const project = get().projects[projectId]
+        if (!project) return
+
+        const rootCount = Object.values(get().tasks)
+          .filter(t => t.projectId === projectId && t.parentId === null).length
+        const ts = now()
+
+        set(state => {
+          let nextRoot = rootCount
+
+          const addTask = (
+            name: string,
+            description: string | undefined,
+            isMilestone: boolean,
+            duration: number,
+            parentId: string | null,
+            sortOrder: number,
+          ): string => {
+            const tid = generateId()
+            state.tasks[tid] = {
+              id: tid,
+              projectId,
+              name,
+              description,
+              isMilestone,
+              isSummary: false,
+              parentId,
+              childIds: [],
+              sortOrder,
+              schedulingMode: 'auto',
+              plannedDuration: isMilestone ? 0 : duration,
+              plannedStart: project.plannedStart,
+              plannedEnd: project.plannedStart,
+              percentComplete: 0,
+              status: 'not_started',
+              assigneeIds: [],
+              budgetAmount: 0,
+              actualCost: 0,
+              createdAt: ts,
+              updatedAt: ts,
+            }
+            return tid
+          }
+
+          const addChildren = (parentId: string, tasks: import('@/data/envConsultancyLibrary').LibraryTask[]) => {
+            for (let i = 0; i < tasks.length; i++) {
+              const t = tasks[i]
+              const childId = addTask(t.name, t.description, t.isMilestone ?? false, t.duration, parentId, i)
+              state.tasks[parentId].childIds.push(childId)
+              if (t.children && t.children.length > 0) {
+                state.tasks[childId].isSummary = true
+                addChildren(childId, t.children)
+              }
+            }
+          }
+
+          for (const phase of phases) {
+            const phaseId = addTask(phase.name, phase.description, false, 0, null, nextRoot++)
+            state.tasks[phaseId].isSummary = true
+            addChildren(phaseId, phase.tasks)
+          }
+
+          refreshWbs(state, projectId)
+        })
+
+        get().recomputeSchedule(projectId)
       },
 
       // ─── Dependencies ────────────────────────────────────────────────────────
